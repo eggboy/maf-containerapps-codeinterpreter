@@ -12,7 +12,11 @@ from pydantic import BaseModel, Field, ValidationError
 
 logger = logging.getLogger(__name__)
 
+# API Configuration Constants
 SESSIONS_API_VERSION = "2024-02-02-preview"
+DEFAULT_HTTP_TIMEOUT = 30.0
+DEFAULT_REMOTE_FILE_DIR = "/mnt/data/"
+AZURE_SESSIONS_SCOPE = "https://dynamicsessions.io/.default"
 
 
 class SessionsRemoteFileMetadata(BaseModel):
@@ -68,9 +72,16 @@ class ACASessionsSettings(BaseModel):
     def get_sessions_auth_token(
         self, credential: TokenCredential | None = None
     ) -> str | None:
-        """Get authentication token for sessions."""
+        """Get authentication token for sessions.
+
+        Args:
+            credential: Azure credential to use for token acquisition.
+
+        Returns:
+            The authentication token if credential is provided, None otherwise.
+        """
         if credential:
-            token = credential.get_token("https://dynamicsessions.io/.default")
+            token = credential.get_token(AZURE_SESSIONS_SCOPE)
             return token.token
         return None
 
@@ -96,6 +107,7 @@ class SessionsPythonTool:
         pool_management_endpoint: str | None = None,
         settings: SessionsPythonSettings | None = None,
         http_client: AsyncClient | None = None,
+        http_timeout: float = DEFAULT_HTTP_TIMEOUT,
         env_file_path: str | None = None,
         token_endpoint: str | None = None,
         credential: TokenCredential | None = None,
@@ -113,6 +125,7 @@ class SessionsPythonTool:
             env_file_path: Path to .env file.
             token_endpoint: Token endpoint for authentication.
             credential: Azure credential for authentication.
+            http_timeout: Timeout in seconds for HTTP requests. Default is 30.0 seconds.
             enable_dangerous_file_uploads: Flag to enable file upload operations.
                 Must be True along with allowed_upload_directories to enable file uploads.
                 Default is False (file uploads disabled).
@@ -135,7 +148,7 @@ class SessionsPythonTool:
             settings = SessionsPythonSettings()
 
         if not http_client:
-            http_client = AsyncClient(timeout=30)
+            http_client = AsyncClient(timeout=http_timeout)
 
         if auth_callback is None:
             auth_callback = self._default_auth_callback(aca_settings, credential)
@@ -239,29 +252,41 @@ class SessionsPythonTool:
         return re.sub(r"(\s|`)*$", "", code)
 
     def _construct_remote_file_path(self, remote_file_path: str) -> str:
-        """Construct the remote file path.
+        """Construct the remote file path with proper prefix.
+
+        Ensures the remote file path starts with /mnt/data/ prefix.
 
         Args:
-            remote_file_path: The remote file path.
+            remote_file_path: The remote file path (with or without prefix).
 
         Returns:
-            The remote file path.
+            The normalized remote file path with /mnt/data/ prefix.
         """
-        if not remote_file_path.startswith("/mnt/data/"):
-            remote_file_path = f"/mnt/data/{remote_file_path}"
+        if not remote_file_path.startswith(DEFAULT_REMOTE_FILE_DIR):
+            remote_file_path = f"{DEFAULT_REMOTE_FILE_DIR}{remote_file_path}"
         return remote_file_path
 
     def _build_url_with_version(
         self, base_url: str, endpoint: str, params: dict[str, str]
     ) -> str:
-        """Build a URL with the provided base URL, endpoint, and query parameters."""
+        """Build a complete API URL with version and query parameters.
+
+        Args:
+            base_url: The base URL of the API.
+            endpoint: The API endpoint path.
+            params: Dictionary of query parameters.
+
+        Returns:
+            The complete URL with api-version and query parameters.
+        """
         params["api-version"] = SESSIONS_API_VERSION
         query_string = "&".join([f"{key}={value}" for key, value in params.items()])
-        if not base_url.endswith("/"):
-            base_url += "/"
-        if endpoint.endswith("/"):
-            endpoint = endpoint[:-1]
-        return f"{base_url}{endpoint}?{query_string}"
+
+        # Normalize base URL and endpoint slashes
+        normalized_base = base_url if base_url.endswith("/") else f"{base_url}/"
+        normalized_endpoint = endpoint.rstrip("/")
+
+        return f"{normalized_base}{normalized_endpoint}?{query_string}"
 
     def _validate_local_path_for_upload(self, local_file_path: str) -> str:
         """Validate local path is within allowed upload directories.
@@ -291,11 +316,12 @@ class SessionsPythonTool:
         for allowed_dir in self.allowed_upload_directories:
             allowed_canonical = os.path.realpath(allowed_dir)
             try:
-                common = os.path.commonpath([allowed_canonical, canonical_path])
-                if common == allowed_canonical:
+                common_path = os.path.commonpath([allowed_canonical, canonical_path])
+                if common_path == allowed_canonical:
                     return canonical_path
             except ValueError:
-                continue  # Different drives on Windows
+                # Different drives on Windows - skip this allowed directory
+                continue
 
         logger.warning(
             f"Upload denied for path: {local_file_path} (resolved: {canonical_path})"
@@ -328,10 +354,11 @@ class SessionsPythonTool:
         for allowed_dir in self.allowed_download_directories:
             allowed_canonical = os.path.realpath(allowed_dir)
             try:
-                common = os.path.commonpath([allowed_canonical, canonical_parent])
-                if common == allowed_canonical:
+                common_path = os.path.commonpath([allowed_canonical, canonical_parent])
+                if common_path == allowed_canonical:
                     return canonical_path
             except ValueError:
+                # Different drives on Windows - skip this allowed directory
                 continue
 
         logger.warning(f"Download denied for path: {local_file_path}")
@@ -357,7 +384,6 @@ class SessionsPythonTool:
             ValueError: If the provided code is empty.
             RuntimeError: If code execution fails.
         """
-
         if not code:
             raise ValueError("The provided code is empty")
 
@@ -379,22 +405,25 @@ class SessionsPythonTool:
 
         url = self._build_url_with_version(
             base_url=self.pool_management_endpoint,
-            endpoint="code/execute/",
+            endpoint="code/execute",
             params={"identifier": self.settings.session_id},
         )
 
         try:
-            response = await self.http_client.post(
-                url=url,
-                json=request_body,
-            )
+            response = await self.http_client.post(url=url, json=request_body)
             response.raise_for_status()
+
             result = response.json()["properties"]
+            status = result.get("status", "Unknown")
+            result_value = result.get("result", "")
+            stdout = result.get("stdout", "")
+            stderr = result.get("stderr", "")
+
             return (
-                f"Status:\n{result['status']}\n"
-                f"Result:\n{result['result']}\n"
-                f"Stdout:\n{result['stdout']}\n"
-                f"Stderr:\n{result['stderr']}"
+                f"Status:\n{status}\n"
+                f"Result:\n{result_value}\n"
+                f"Stdout:\n{stdout}\n"
+                f"Stderr:\n{stderr}"
             )
         except HTTPStatusError as e:
             error_message = (
@@ -445,30 +474,35 @@ class SessionsPythonTool:
         )
 
         try:
-            with open(validated_path, "rb") as data:
+            with open(validated_path, "rb") as file_stream:
+                file_content = file_stream.read()
                 files = {
-                    "file": (remote_file_path, data.read(), "application/octet-stream")
+                    "file": (remote_file_path, file_content, "application/octet-stream")
                 }
                 response = await self.http_client.post(url=url, files=files)
                 response.raise_for_status()
-                uploaded_files = await self.list_files()
-                # Extract filename from remote_file_path for comparison
-                expected_filename = os.path.basename(remote_file_path)
-                matching_file = next(
-                    (
-                        file_metadata
-                        for file_metadata in uploaded_files
-                        if file_metadata.full_path == remote_file_path
-                        or file_metadata.filename == expected_filename
-                        or file_metadata.full_path == expected_filename
-                    ),
-                    None,
+
+            # Verify the file was uploaded successfully
+            uploaded_files = await self.list_files()
+            expected_filename = os.path.basename(remote_file_path)
+
+            matching_file = next(
+                (
+                    file_metadata
+                    for file_metadata in uploaded_files
+                    if file_metadata.full_path == remote_file_path
+                    or file_metadata.filename == expected_filename
+                    or file_metadata.full_path == expected_filename
+                ),
+                None,
+            )
+
+            if matching_file is None:
+                raise RuntimeError(
+                    f"Upload verification failed: '{remote_file_path}' not found in session file list"
                 )
-                if matching_file is None:
-                    raise RuntimeError(
-                        f"Uploaded file '{remote_file_path}' not found in session file list"
-                    )
-                return matching_file
+
+            return matching_file
         except HTTPStatusError as e:
             error_message = (
                 e.response.text if e.response.text else e.response.reason_phrase
@@ -495,14 +529,15 @@ class SessionsPythonTool:
         )
 
         try:
-            response = await self.http_client.get(
-                url=url,
-            )
+            response = await self.http_client.get(url=url)
             response.raise_for_status()
-            response_json = response.json()
+
+            response_data = response.json()
+            file_entries = response_data.get("value", [])
+
             return [
                 SessionsRemoteFileMetadata.from_dict(entry["properties"])
-                for entry in response_json["value"]
+                for entry in file_entries
             ]
         except HTTPStatusError as e:
             error_message = (
@@ -543,18 +578,19 @@ class SessionsPythonTool:
         )
 
         try:
-            response = await self.http_client.get(
-                url=url,
-            )
+            response = await self.http_client.get(url=url)
             response.raise_for_status()
+
+            file_content = response.content
+
             if local_file_path:
                 # Validate path is in allowed directories (optional, permissive by default)
                 validated_path = self._validate_local_path_for_download(local_file_path)
-                with open(validated_path, "wb") as f:
-                    f.write(response.content)
+                with open(validated_path, "wb") as file_stream:
+                    file_stream.write(file_content)
                 return validated_path
 
-            return BytesIO(response.content)
+            return BytesIO(file_content)
         except HTTPStatusError as e:
             error_message = (
                 e.response.text if e.response.text else e.response.reason_phrase
