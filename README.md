@@ -19,7 +19,7 @@ az role assignment create \
   --scope /subscriptions/<subscription-id>/resourceGroups/<resource-group>/providers/Microsoft.App/sessionPools/<pool-name>
 ```
 
-3. **Populate .env**: Copy the `.env.example` to `.env` and populate the following environment variables.
+3. **Populate Dot Env**: Copy the `.env.example` to `.env` and populate the following environment variables.
 ```bash
 AZURE_CONTAINER_APP_SESSION_POOL_MANAGEMENT_ENDPOINT=https://{REGION}.dynamicsessions.io/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RESOURCE_GROUP}/sessionPools/${SESSION_POOL_NAME}
 AZURE_OPENAI_CHAT_DEPLOYMENT_NAME=
@@ -68,12 +68,9 @@ asyncio.run(main())
 
 Check out the `examples/` directory for examples:
 
-- `basic_usage.py`: Demonstrates SessionsPythonTool integrating with Microsoft Agent Framework
-`uv run python examples/basic_usage.py`
+- `basic_usage.py`: Demonstrates SessionsPythonTool integrating with Microsoft Agent Framework - `uv run python examples/basic_usage.py`
 
-- `file_operations.py`: Shows how to upload files to sessions, process them with Python code, and download results with Dynamic Sessions and MAF
-
-`uv run python examples/file_operations.py`
+- `file_operations.py`: Shows how to upload files to sessions, process them with Python code, and download results with Dynamic Sessions and MAF - `uv run python examples/file_operations.py`
 
 ## Configuration
 
@@ -93,11 +90,7 @@ tool = SessionsPythonTool(
 
 ## API Reference
 
-### SessionsPythonTool
-
-Main tool class for Python code execution.
-
-#### Methods
+### Methods
 
 - `execute_code(code: str) -> str`: Execute Python code and return results
 - `upload_file(local_file_path: str, remote_file_path: str | None) -> SessionsRemoteFileMetadata`: Upload a file
@@ -106,6 +99,5 @@ Main tool class for Python code execution.
 
 ## Related Projects
 
-- [Semantic Kernel](https://github.com/microsoft/semantic-kernel): Microsoft's AI orchestration SDK
 - [Microsoft Agent Framework](https://github.com/microsoft/agent-framework): Unified framework for AI agents
 - [Azure Container Apps](https://learn.microsoft.com/en-us/azure/container-apps/): Microsoft's serverless container platform
