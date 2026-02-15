@@ -1,3 +1,4 @@
+import asyncio
 import inspect
 import logging
 import os
@@ -17,7 +18,6 @@ SESSIONS_API_VERSION = "2024-02-02-preview"
 DEFAULT_HTTP_TIMEOUT = 30.0
 DEFAULT_REMOTE_FILE_DIR = "/mnt/data/"
 AZURE_SESSIONS_SCOPE = "https://dynamicsessions.io/.default"
-
 
 class SessionsRemoteFileMetadata(BaseModel):
     """Metadata for a remote file in a session."""
@@ -142,6 +142,9 @@ class SessionsPythonTool:
 
         if not http_client:
             http_client = AsyncClient(timeout=http_timeout)
+            self._owns_http_client = True
+        else:
+            self._owns_http_client = False
 
         if auth_callback is None:
             auth_callback = self._default_auth_callback(aca_settings, credential)
@@ -188,6 +191,34 @@ class SessionsPythonTool:
             The execution result including stdout, stderr, and return value
         """
         return await self.execute_code(code)
+
+    async def close(self) -> None:
+        """Close the HTTP client if owned by this instance.
+
+        This method should be called when the tool is no longer needed to properly
+        release HTTP connection resources. If an external HTTP client was provided
+        during initialization, it will not be closed.
+        """
+        if self._owns_http_client and self.http_client:
+            await self.http_client.aclose()
+
+    async def __aenter__(self) -> "SessionsPythonTool":
+        """Enter async context manager.
+
+        Returns:
+            The SessionsPythonTool instance.
+        """
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Exit async context manager and cleanup resources.
+
+        Args:
+            exc_type: Exception type if an exception was raised.
+            exc_val: Exception value if an exception was raised.
+            exc_tb: Exception traceback if an exception was raised.
+        """
+        await self.close()
 
     def _default_auth_callback(
         self, aca_settings: ACASessionsSettings, credential: TokenCredential | None
@@ -362,7 +393,7 @@ class SessionsPythonTool:
     async def execute_code(
         self, code: Annotated[str, "The valid Python code to execute"]
     ) -> str:
-        """Execute Python code
+        """Execute Python code.
 
         This function is designed to be used as a tool with Microsoft Agent Framework.
         It executes the provided Python code and returns the result, stdout, and stderr.
@@ -467,13 +498,12 @@ class SessionsPythonTool:
         )
 
         try:
-            with open(validated_path, "rb") as file_stream:
-                file_content = file_stream.read()
-                files = {
-                    "file": (remote_file_path, file_content, "application/octet-stream")
-                }
-                response = await self.http_client.post(url=url, files=files)
-                response.raise_for_status()
+            file_content = await asyncio.to_thread(_read_file_bytes, validated_path)
+            files = {
+                "file": (remote_file_path, file_content, "application/octet-stream")
+            }
+            response = await self.http_client.post(url=url, files=files)
+            response.raise_for_status()
 
             # Verify the file was uploaded successfully
             uploaded_files = await self.list_files()
@@ -579,8 +609,7 @@ class SessionsPythonTool:
             if local_file_path:
                 # Validate path is in allowed directories (optional, permissive by default)
                 validated_path = self._validate_local_path_for_download(local_file_path)
-                with open(validated_path, "wb") as file_stream:
-                    file_stream.write(file_content)
+                await asyncio.to_thread(_write_file_bytes, validated_path, file_content)
                 return validated_path
 
             return BytesIO(file_content)
@@ -591,3 +620,13 @@ class SessionsPythonTool:
             raise RuntimeError(
                 f"Download failed with status code {e.response.status_code} and error: {error_message}"
             ) from e
+
+
+def _read_file_bytes(file_path: str) -> bytes:
+    with open(file_path, "rb") as file_stream:
+        return file_stream.read()
+
+
+def _write_file_bytes(file_path: str, content: bytes) -> None:
+    with open(file_path, "wb") as file_stream:
+        file_stream.write(content)

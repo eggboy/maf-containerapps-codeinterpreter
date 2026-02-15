@@ -8,9 +8,9 @@ from maf_code_interpreter.sessions_python_tool import (
 )
 
 __all__ = [
-    "SessionsPythonTool",
-    "SessionsPythonSettings",
     "ACASessionsSettings",
+    "SessionsPythonSettings",
+    "SessionsPythonTool",
     "SessionsRemoteFileMetadata",
 ]
 
