@@ -40,13 +40,11 @@ class ACASessionsSettings(BaseModel):
     """Settings for Azure Container Apps Sessions."""
 
     pool_management_endpoint: str
-    token_endpoint: str | None = None
 
     def __init__(
         self,
         env_file_path: str | None = None,
         pool_management_endpoint: str | None = None,
-        token_endpoint: str | None = None,
     ):
         """Initialize settings from environment or parameters."""
         if env_file_path:
@@ -64,9 +62,7 @@ class ACASessionsSettings(BaseModel):
             )
 
         super().__init__(
-            pool_management_endpoint=endpoint,
-            token_endpoint=token_endpoint
-            or os.getenv("AZURE_CONTAINER_APP_SESSION_TOKEN_ENDPOINT"),
+            pool_management_endpoint=endpoint
         )
 
     def get_sessions_auth_token(
@@ -109,7 +105,6 @@ class SessionsPythonTool:
         http_client: AsyncClient | None = None,
         http_timeout: float = DEFAULT_HTTP_TIMEOUT,
         env_file_path: str | None = None,
-        token_endpoint: str | None = None,
         credential: TokenCredential | None = None,
         enable_dangerous_file_uploads: bool = False,
         allowed_upload_directories: set[str] | list[str] | None = None,
@@ -123,7 +118,6 @@ class SessionsPythonTool:
             settings: Python session settings.
             http_client: HTTP client for making requests.
             env_file_path: Path to .env file.
-            token_endpoint: Token endpoint for authentication.
             credential: Azure credential for authentication.
             http_timeout: Timeout in seconds for HTTP requests. Default is 30.0 seconds.
             enable_dangerous_file_uploads: Flag to enable file upload operations.
@@ -137,8 +131,7 @@ class SessionsPythonTool:
         try:
             aca_settings = ACASessionsSettings(
                 env_file_path=env_file_path,
-                pool_management_endpoint=pool_management_endpoint,
-                token_endpoint=token_endpoint,
+                pool_management_endpoint=pool_management_endpoint
             )
         except ValidationError as e:
             logger.error(f"Failed to load the ACASessionsSettings: {e!s}")
@@ -369,7 +362,7 @@ class SessionsPythonTool:
     async def execute_code(
         self, code: Annotated[str, "The valid Python code to execute"]
     ) -> str:
-        """Execute Python code in a dynamic session.
+        """Execute Python code
 
         This function is designed to be used as a tool with Microsoft Agent Framework.
         It executes the provided Python code and returns the result, stdout, and stderr.
