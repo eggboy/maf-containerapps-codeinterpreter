@@ -1,4 +1,4 @@
-import asyncio  # noqa: F401 - Used when examples are uncommented
+import asyncio
 import os
 from pathlib import Path
 
@@ -14,7 +14,6 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 
 async def main():
     """Example demonstrating SessionsPythonTool with Microsoft Agent Framework."""
-
     pool_endpoint = os.getenv("AZURE_CONTAINER_APP_SESSION_POOL_MANAGEMENT_ENDPOINT")
 
     # Initialize the SessionsPythonTool with Azure credentials
@@ -52,9 +51,7 @@ async def main():
 
     # Example 3: Generate data
     print("\n=== Example 3: Generate Plot Data ===")
-    result = await agent.run(
-        "use the python tool toGenerate 10 random numbers between 1 and 100 and show their sum"
-    )
+    result = await agent.run("use the python tool toGenerate 10 random numbers between 1 and 100 and show their sum")
     print(f"Result: {result}")
 
     # Example 4: Working with libraries
@@ -67,7 +64,6 @@ async def main():
 
 async def direct_tool_usage_example():
     """Example of using SessionsPythonTool directly without an agent."""
-
     print("\n=== Direct Tool Usage Example ===")
 
     # Initialize the tool

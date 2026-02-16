@@ -3,6 +3,7 @@ import os
 import tempfile
 from pathlib import Path
 
+import aiofiles
 from azure.identity import DefaultAzureCredential
 from dotenv import load_dotenv
 
@@ -13,7 +14,6 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 
 async def file_operations_example():
     """Example demonstrating file upload, processing, and download."""
-
     print("\n=== File Operations Example ===\n")
 
     # Create a temporary directory for our test files
@@ -36,12 +36,12 @@ async def file_operations_example():
         # 1. Create a sample CSV file locally
         print("\n1. Creating sample CSV file...")
         csv_path = Path(temp_dir) / "sample_data.csv"
-        with open(csv_path, "w") as f:
-            f.write("name,age,score\n")
-            f.write("Alice,25,95\n")
-            f.write("Bob,30,87\n")
-            f.write("Charlie,35,92\n")
-            f.write("Diana,28,89\n")
+        async with aiofiles.open(csv_path, "w") as f:
+            await f.write("name,age,score\n")
+            await f.write("Alice,25,95\n")
+            await f.write("Bob,30,87\n")
+            await f.write("Charlie,35,92\n")
+            await f.write("Diana,28,89\n")
         print(f"   Created: {csv_path}")
 
         # 2. Upload the file to the session
@@ -98,8 +98,8 @@ stats
 
         # 6. Read and display the downloaded file
         print("\n6. Contents of downloaded file:")
-        with open(download_path) as f:
-            print(f.read())
+        async with aiofiles.open(download_path) as f:
+            print(await f.read())
 
     finally:
         # Cleanup
@@ -112,7 +112,6 @@ stats
 
 async def data_visualization_example():
     """Example showing how to create and download a plot."""
-
     print("\n=== Data Visualization Example ===\n")
 
     temp_dir = tempfile.mkdtemp()
