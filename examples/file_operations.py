@@ -93,7 +93,7 @@ stats
         # 5. Download the processed file
         print("\n5. Downloading processed file...")
         download_path = Path(temp_dir) / "results.csv"
-        await sessions_tool.download_file(remote_file_name="results.csv", local_file_path=str(download_path))
+        await sessions_tool.download_file_to_path(remote_file_name="results.csv", local_file_path=str(download_path))
         print(f"   Downloaded to: {download_path}")
 
         # 6. Read and display the downloaded file
@@ -159,7 +159,7 @@ print("Plot saved to /mnt/data/plot.png")
         # Download the plot
         print("\n2. Downloading the plot...")
         plot_path = Path(temp_dir) / "plot.png"
-        await sessions_tool.download_file(remote_file_name="plot.png", local_file_path=str(plot_path))
+        await sessions_tool.download_file_to_path(remote_file_name="plot.png", local_file_path=str(plot_path))
         print(f"   Downloaded to: {plot_path}")
         print(f"   File size: {plot_path.stat().st_size} bytes")
 

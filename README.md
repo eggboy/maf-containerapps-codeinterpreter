@@ -94,7 +94,8 @@ tool = SessionsPythonTool(
 
 - `execute_code(code: str) -> str`: Execute Python code and return results
 - `upload_file(local_file_path: str, remote_file_path: str | None) -> SessionsRemoteFileMetadata`: Upload a file
-- `download_file(remote_file_name: str, local_file_path: str | None) -> BytesIO | None`: Download a file
+- `download_file_to_path(remote_file_name: str, local_file_path: str) -> str`: Download a file and save to local path
+- `download_file_to_bytes(remote_file_name: str) -> BytesIO`: Download a file as a BytesIO object
 - `list_files() -> list[SessionsRemoteFileMetadata]`: List files in the session
 
 ## Related Projects

@@ -6,6 +6,7 @@ import re
 from collections.abc import Awaitable, Callable
 from io import BytesIO
 from typing import Annotated, Any
+from urllib.parse import urlencode
 
 from azure.core.credentials import TokenCredential
 from httpx import AsyncClient, HTTPStatusError
@@ -18,6 +19,7 @@ SESSIONS_API_VERSION = "2024-02-02-preview"
 DEFAULT_HTTP_TIMEOUT = 30.0
 DEFAULT_REMOTE_FILE_DIR = "/mnt/data/"
 AZURE_SESSIONS_SCOPE = "https://dynamicsessions.io/.default"
+
 
 class SessionsRemoteFileMetadata(BaseModel):
     """Metadata for a remote file in a session."""
@@ -52,22 +54,16 @@ class ACASessionsSettings(BaseModel):
 
             load_dotenv(env_file_path)
 
-        endpoint = pool_management_endpoint or os.getenv(
-            "AZURE_CONTAINER_APP_SESSION_POOL_MANAGEMENT_ENDPOINT"
-        )
+        endpoint = pool_management_endpoint or os.getenv("AZURE_CONTAINER_APP_SESSION_POOL_MANAGEMENT_ENDPOINT")
         if not endpoint:
             raise ValueError(
                 "pool_management_endpoint must be provided or set in "
                 "AZURE_CONTAINER_APP_SESSION_POOL_MANAGEMENT_ENDPOINT environment variable"
             )
 
-        super().__init__(
-            pool_management_endpoint=endpoint
-        )
+        super().__init__(pool_management_endpoint=endpoint)
 
-    def get_sessions_auth_token(
-        self, credential: TokenCredential | None = None
-    ) -> str | None:
+    def get_sessions_auth_token(self, credential: TokenCredential | None = None) -> str | None:
         """Get authentication token for sessions.
 
         Args:
@@ -130,17 +126,16 @@ class SessionsPythonTool:
         """
         try:
             aca_settings = ACASessionsSettings(
-                env_file_path=env_file_path,
-                pool_management_endpoint=pool_management_endpoint
+                env_file_path=env_file_path, pool_management_endpoint=pool_management_endpoint
             )
         except ValidationError as e:
             logger.error(f"Failed to load the ACASessionsSettings: {e!s}")
             raise ValueError(f"Failed to load the ACASessionsSettings: {e!s}") from e
 
-        if not settings:
+        if settings is None:
             settings = SessionsPythonSettings()
 
-        if not http_client:
+        if http_client is None:
             http_client = AsyncClient(timeout=http_timeout)
             self._owns_http_client = True
         else:
@@ -150,22 +145,14 @@ class SessionsPythonTool:
             auth_callback = self._default_auth_callback(aca_settings, credential)
 
         # Convert lists to sets and filter out empty strings (which resolve to CWD - a security risk)
-        upload_dirs = (
-            {d for d in allowed_upload_directories if d}
-            if allowed_upload_directories is not None
-            else None
-        )
+        upload_dirs = {d for d in allowed_upload_directories if d} if allowed_upload_directories is not None else None
         download_dirs = (
-            {d for d in allowed_download_directories if d}
-            if allowed_download_directories is not None
-            else None
+            {d for d in allowed_download_directories if d} if allowed_download_directories is not None else None
         )
 
         # Warn if empty set provided
         if upload_dirs is not None and len(upload_dirs) == 0:
-            logger.warning(
-                "allowed_upload_directories is empty - no uploads will be allowed"
-            )
+            logger.warning("allowed_upload_directories is empty - no uploads will be allowed")
 
         self.pool_management_endpoint = aca_settings.pool_management_endpoint
         self.settings = settings
@@ -244,9 +231,7 @@ class SessionsPythonTool:
                 auth_token = self.auth_callback()
         except Exception as e:
             logger.error(f"Failed to retrieve the client auth token: {e!s}")
-            raise RuntimeError(
-                f"Failed to retrieve the client auth token: {e!s}"
-            ) from e
+            raise RuntimeError(f"Failed to retrieve the client auth token: {e!s}") from e
 
         return auth_token
 
@@ -290,9 +275,7 @@ class SessionsPythonTool:
             remote_file_path = f"{DEFAULT_REMOTE_FILE_DIR}{remote_file_path}"
         return remote_file_path
 
-    def _build_url_with_version(
-        self, base_url: str, endpoint: str, params: dict[str, str]
-    ) -> str:
+    def _build_url_with_version(self, base_url: str, endpoint: str, params: dict[str, str]) -> str:
         """Build a complete API URL with version and query parameters.
 
         Args:
@@ -304,7 +287,7 @@ class SessionsPythonTool:
             The complete URL with api-version and query parameters.
         """
         params["api-version"] = SESSIONS_API_VERSION
-        query_string = "&".join([f"{key}={value}" for key, value in params.items()])
+        query_string = urlencode(params)
 
         # Normalize base URL and endpoint slashes
         normalized_base = base_url if base_url.endswith("/") else f"{base_url}/"
@@ -331,9 +314,7 @@ class SessionsPythonTool:
             )
 
         if self.allowed_upload_directories is None:
-            raise RuntimeError(
-                "File upload requires 'allowed_upload_directories' to be configured."
-            )
+            raise RuntimeError("File upload requires 'allowed_upload_directories' to be configured.")
 
         canonical_path = os.path.realpath(local_file_path)
 
@@ -347,12 +328,8 @@ class SessionsPythonTool:
                 # Different drives on Windows - skip this allowed directory
                 continue
 
-        logger.warning(
-            f"Upload denied for path: {local_file_path} (resolved: {canonical_path})"
-        )
-        raise RuntimeError(
-            f"Access denied: '{local_file_path}' is not within allowed upload directories."
-        )
+        logger.warning(f"Upload denied for path: {local_file_path} (resolved: {canonical_path})")
+        raise RuntimeError(f"Access denied: '{local_file_path}' is not within allowed upload directories.")
 
     def _validate_local_path_for_download(self, local_file_path: str) -> str:
         """Validate local path is within allowed download directories.
@@ -386,13 +363,9 @@ class SessionsPythonTool:
                 continue
 
         logger.warning(f"Download denied for path: {local_file_path}")
-        raise RuntimeError(
-            f"Access denied: '{local_file_path}' is not within allowed download directories."
-        )
+        raise RuntimeError(f"Access denied: '{local_file_path}' is not within allowed download directories.")
 
-    async def execute_code(
-        self, code: Annotated[str, "The valid Python code to execute"]
-    ) -> str:
+    async def execute_code(self, code: Annotated[str, "The valid Python code to execute"]) -> str:
         """Execute Python code.
 
         This function is designed to be used as a tool with Microsoft Agent Framework.
@@ -414,17 +387,14 @@ class SessionsPythonTool:
         if self.settings.sanitize_input:
             code = self._sanitize_input(code)
 
-        logger.info(f"Executing Python code: {code}")
+        logger.debug("Executing Python code (%d chars)", len(code))
 
         await self._set_auth_headers()
-        self.http_client.headers["Content-Type"] = "application/json"
 
-        self.settings.python_code = code
+        request_settings = self.settings.model_copy(update={"python_code": code})
 
         request_body = {
-            "properties": self.settings.model_dump(
-                exclude_none=True, exclude={"sanitize_input"}, by_alias=True
-            ),
+            "properties": request_settings.model_dump(exclude_none=True, exclude={"sanitize_input"}, by_alias=True),
         }
 
         url = self._build_url_with_version(
@@ -434,7 +404,9 @@ class SessionsPythonTool:
         )
 
         try:
-            response = await self.http_client.post(url=url, json=request_body)
+            response = await self.http_client.post(
+                url=url, json=request_body, headers={"Content-Type": "application/json"}
+            )
             response.raise_for_status()
 
             result = response.json()["properties"]
@@ -443,16 +415,9 @@ class SessionsPythonTool:
             stdout = result.get("stdout", "")
             stderr = result.get("stderr", "")
 
-            return (
-                f"Status:\n{status}\n"
-                f"Result:\n{result_value}\n"
-                f"Stdout:\n{stdout}\n"
-                f"Stderr:\n{stderr}"
-            )
+            return f"Status:\n{status}\nResult:\n{result_value}\nStdout:\n{stdout}\nStderr:\n{stderr}"
         except HTTPStatusError as e:
-            error_message = (
-                e.response.text if e.response.text else e.response.reason_phrase
-            )
+            error_message = e.response.text if e.response.text else e.response.reason_phrase
             raise RuntimeError(
                 f"Code execution failed with status code {e.response.status_code} and error: {error_message}"
             ) from e
@@ -485,9 +450,7 @@ class SessionsPythonTool:
         # Validate path is in allowed directories (deny-by-default)
         validated_path = self._validate_local_path_for_upload(local_file_path)
 
-        remote_file_path = self._construct_remote_file_path(
-            remote_file_path or os.path.basename(validated_path)
-        )
+        remote_file_path = self._construct_remote_file_path(remote_file_path or os.path.basename(validated_path))
 
         await self._set_auth_headers()
 
@@ -499,9 +462,7 @@ class SessionsPythonTool:
 
         try:
             file_content = await asyncio.to_thread(_read_file_bytes, validated_path)
-            files = {
-                "file": (remote_file_path, file_content, "application/octet-stream")
-            }
+            files = {"file": (remote_file_path, file_content, "application/octet-stream")}
             response = await self.http_client.post(url=url, files=files)
             response.raise_for_status()
 
@@ -521,15 +482,11 @@ class SessionsPythonTool:
             )
 
             if matching_file is None:
-                raise RuntimeError(
-                    f"Upload verification failed: '{remote_file_path}' not found in session file list"
-                )
+                raise RuntimeError(f"Upload verification failed: '{remote_file_path}' not found in session file list")
 
             return matching_file
         except HTTPStatusError as e:
-            error_message = (
-                e.response.text if e.response.text else e.response.reason_phrase
-            )
+            error_message = e.response.text if e.response.text else e.response.reason_phrase
             raise RuntimeError(
                 f"Upload failed with status code {e.response.status_code} and error: {error_message}"
             ) from e
@@ -558,39 +515,24 @@ class SessionsPythonTool:
             response_data = response.json()
             file_entries = response_data.get("value", [])
 
-            return [
-                SessionsRemoteFileMetadata.from_dict(entry["properties"])
-                for entry in file_entries
-            ]
+            return [SessionsRemoteFileMetadata.from_dict(entry["properties"]) for entry in file_entries]
         except HTTPStatusError as e:
-            error_message = (
-                e.response.text if e.response.text else e.response.reason_phrase
-            )
+            error_message = e.response.text if e.response.text else e.response.reason_phrase
             raise RuntimeError(
                 f"List files failed with status code {e.response.status_code} and error: {error_message}"
             ) from e
 
-    async def download_file(
-        self,
-        remote_file_name: Annotated[
-            str, "The name of the file to download, relative to /mnt/data"
-        ],
-        local_file_path: Annotated[
-            str | None, "The local file path to save the file to, optional"
-        ] = None,
-    ) -> str | BytesIO:
-        """Download a file from the session pool.
+    async def _download_file_content(self, remote_file_name: str) -> bytes:
+        """Download raw file content from the session pool.
 
         Args:
             remote_file_name: The name of the file to download, relative to `/mnt/data`.
-            local_file_path: The path to save the downloaded file to. Should include the extension.
-                If not provided, the file is returned as a BytesIO object.
 
         Returns:
-            The saved file path (str) if local_file_path provided, otherwise BytesIO content.
+            The raw file content as bytes.
 
         Raises:
-            RuntimeError: If download fails or local_file_path is not in allowed directories.
+            RuntimeError: If download fails.
         """
         await self._set_auth_headers()
 
@@ -603,23 +545,52 @@ class SessionsPythonTool:
         try:
             response = await self.http_client.get(url=url)
             response.raise_for_status()
-
-            file_content = response.content
-
-            if local_file_path:
-                # Validate path is in allowed directories (optional, permissive by default)
-                validated_path = self._validate_local_path_for_download(local_file_path)
-                await asyncio.to_thread(_write_file_bytes, validated_path, file_content)
-                return validated_path
-
-            return BytesIO(file_content)
+            return response.content
         except HTTPStatusError as e:
-            error_message = (
-                e.response.text if e.response.text else e.response.reason_phrase
-            )
+            error_message = e.response.text if e.response.text else e.response.reason_phrase
             raise RuntimeError(
                 f"Download failed with status code {e.response.status_code} and error: {error_message}"
             ) from e
+
+    async def download_file_to_path(
+        self,
+        remote_file_name: Annotated[str, "The name of the file to download, relative to /mnt/data"],
+        local_file_path: Annotated[str, "The local file path to save the file to"],
+    ) -> str:
+        """Download a file from the session pool and save it to a local path.
+
+        Args:
+            remote_file_name: The name of the file to download, relative to `/mnt/data`.
+            local_file_path: The path to save the downloaded file to. Should include the extension.
+
+        Returns:
+            The validated local file path where the file was saved.
+
+        Raises:
+            RuntimeError: If download fails or local_file_path is not in allowed directories.
+        """
+        file_content = await self._download_file_content(remote_file_name)
+        validated_path = self._validate_local_path_for_download(local_file_path)
+        await asyncio.to_thread(_write_file_bytes, validated_path, file_content)
+        return validated_path
+
+    async def download_file_to_bytes(
+        self,
+        remote_file_name: Annotated[str, "The name of the file to download, relative to /mnt/data"],
+    ) -> BytesIO:
+        """Download a file from the session pool and return it as a BytesIO object.
+
+        Args:
+            remote_file_name: The name of the file to download, relative to `/mnt/data`.
+
+        Returns:
+            The file content as a BytesIO object.
+
+        Raises:
+            RuntimeError: If download fails.
+        """
+        file_content = await self._download_file_content(remote_file_name)
+        return BytesIO(file_content)
 
 
 def _read_file_bytes(file_path: str) -> bytes:
