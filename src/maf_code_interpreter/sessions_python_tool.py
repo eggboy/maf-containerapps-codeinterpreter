@@ -190,21 +190,9 @@ class SessionsPythonTool:
             await self.http_client.aclose()
 
     async def __aenter__(self) -> "SessionsPythonTool":
-        """Enter async context manager.
-
-        Returns:
-            The SessionsPythonTool instance.
-        """
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
-        """Exit async context manager and cleanup resources.
-
-        Args:
-            exc_type: Exception type if an exception was raised.
-            exc_val: Exception value if an exception was raised.
-            exc_tb: Exception traceback if an exception was raised.
-        """
         await self.close()
 
     def _default_auth_callback(
@@ -217,7 +205,6 @@ class SessionsPythonTool:
             raise ValueError("Failed to retrieve the client auth token.")
 
         def auth_callback() -> str:
-            """Retrieve the client auth token."""
             return token
 
         return auth_callback
@@ -236,7 +223,6 @@ class SessionsPythonTool:
         return auth_token
 
     async def _set_auth_headers(self) -> None:
-        """Set authorization headers for HTTP client."""
         auth_token = await self._ensure_auth_token()
         self.http_client.headers.update(
             {
@@ -261,31 +247,13 @@ class SessionsPythonTool:
         return re.sub(r"(\s|`)*$", "", code)
 
     def _construct_remote_file_path(self, remote_file_path: str) -> str:
-        """Construct the remote file path with proper prefix.
-
-        Ensures the remote file path starts with /mnt/data/ prefix.
-
-        Args:
-            remote_file_path: The remote file path (with or without prefix).
-
-        Returns:
-            The normalized remote file path with /mnt/data/ prefix.
-        """
+        """Ensure path starts with /mnt/data/ prefix."""
         if not remote_file_path.startswith(DEFAULT_REMOTE_FILE_DIR):
             remote_file_path = f"{DEFAULT_REMOTE_FILE_DIR}{remote_file_path}"
         return remote_file_path
 
     def _build_url_with_version(self, base_url: str, endpoint: str, params: dict[str, str]) -> str:
-        """Build a complete API URL with version and query parameters.
-
-        Args:
-            base_url: The base URL of the API.
-            endpoint: The API endpoint path.
-            params: Dictionary of query parameters.
-
-        Returns:
-            The complete URL with api-version and query parameters.
-        """
+        """Build API URL with api-version and query parameters appended."""
         params["api-version"] = SESSIONS_API_VERSION
         query_string = urlencode(params)
 
@@ -523,17 +491,7 @@ class SessionsPythonTool:
             ) from e
 
     async def _download_file_content(self, remote_file_name: str) -> bytes:
-        """Download raw file content from the session pool.
-
-        Args:
-            remote_file_name: The name of the file to download, relative to `/mnt/data`.
-
-        Returns:
-            The raw file content as bytes.
-
-        Raises:
-            RuntimeError: If download fails.
-        """
+        """Download raw bytes for a file from the session, relative to /mnt/data."""
         await self._set_auth_headers()
 
         url = self._build_url_with_version(
