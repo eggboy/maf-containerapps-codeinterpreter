@@ -3,6 +3,7 @@ import inspect
 import logging
 import os
 import re
+import uuid
 from collections.abc import Awaitable, Callable
 from io import BytesIO
 from typing import Annotated, Any
@@ -81,7 +82,7 @@ class ACASessionsSettings(BaseModel):
 class SessionsPythonSettings(BaseModel):
     """Settings for Python code execution in sessions."""
 
-    session_id: str = Field(default="default", alias="identifier")
+    session_id: str = Field(default_factory=lambda: str(uuid.uuid4()), alias="identifier")
     python_code: str | None = Field(default=None, alias="code")
     code_input_type: str = Field(default="Inline", alias="codeInputType")
     execution_type: str = Field(default="Synchronous", alias="executionType")

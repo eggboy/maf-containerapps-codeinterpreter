@@ -1,3 +1,5 @@
+import uuid
+
 import pytest
 
 
@@ -21,13 +23,16 @@ def test_sessions_python_settings():
     from maf_code_interpreter import SessionsPythonSettings
 
     settings = SessionsPythonSettings()
-    assert settings.session_id == "default"
+    # Default session_id should be a valid UUID (generated per instance)
+    uuid.UUID(settings.session_id)  # raises ValueError if not a valid UUID
     assert settings.sanitize_input is True
 
+    # Each instance gets a unique session_id
+    settings2 = SessionsPythonSettings()
+    assert settings.session_id != settings2.session_id
+
     # Test with custom values
-    custom_settings = SessionsPythonSettings(
-        session_id="test-session", sanitize_input=False
-    )
+    custom_settings = SessionsPythonSettings(session_id="test-session", sanitize_input=False)
     assert custom_settings.session_id == "test-session"
     assert custom_settings.sanitize_input is False
 
@@ -36,9 +41,7 @@ def test_remote_file_metadata():
     """Test SessionsRemoteFileMetadata creation."""
     from maf_code_interpreter import SessionsRemoteFileMetadata
 
-    metadata = SessionsRemoteFileMetadata(
-        filename="test.txt", size_in_bytes=100, full_path="/mnt/data/test.txt"
-    )
+    metadata = SessionsRemoteFileMetadata(filename="test.txt", size_in_bytes=100, full_path="/mnt/data/test.txt")
     assert metadata.filename == "test.txt"
     assert metadata.size_in_bytes == 100
     assert metadata.full_path == "/mnt/data/test.txt"
