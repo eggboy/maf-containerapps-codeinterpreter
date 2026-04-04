@@ -2,9 +2,11 @@
 
 This is Azure Container Apps Dynamic Sessions Python Code Interpreter Tool for Microsoft Agent Framework.  `SessionsPythonTool` that integrates Azure Container Apps Dynamic Sessions with Microsoft Agent Framework, enabling secure Python code execution in AI agent workflows.
 
+> **Built and tested for [Microsoft Agent Framework 1.0.0](https://github.com/microsoft/agent-framework)**
+
 - Execute Python code in secure, isolated Azure Container Apps sessions
 - Built-in security with configurable file upload/download restrictions
-- Seamless integration with Microsoft Agent Framework
+- Seamless integration with Microsoft Agent Framework 1.0.0
 
 ## Prerequisites
 
