@@ -8,7 +8,7 @@ authors = [
     { name = "Jay Lee" }
 ]
 dependencies = [
-    "agent-framework>=1.0.0rc1",
+    "agent-framework>=1.0.0",
     "aiofiles>=24.1.0",
     "azure-ai-projects>=2.0.0b3",
     "azure-identity>=1.25.2",

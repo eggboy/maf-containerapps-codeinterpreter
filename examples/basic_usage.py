@@ -2,7 +2,8 @@ import asyncio
 import os
 from pathlib import Path
 
-from agent_framework.azure import AzureOpenAIChatClient
+from agent_framework import Agent
+from agent_framework.openai import OpenAIChatCompletionClient
 from azure.identity import DefaultAzureCredential
 from dotenv import load_dotenv
 
@@ -30,36 +31,45 @@ async def main():
 
     # SessionsPythonTool can be passed directly as a tool — no wrapper function needed.
     # MAF auto-converts it via its __call__ method.
-    agent = AzureOpenAIChatClient(credential=DefaultAzureCredential()).create_agent(
+    client = OpenAIChatCompletionClient(
+        model=os.getenv("AZURE_OPENAI_CHAT_DEPLOYMENT_NAME", "gpt-4o"),
+        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+        api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+        api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2025-03-01-preview"),
+    )
+
+    agent = Agent(
+        client=client,
+        name="code-interpreter",
         instructions="""You are a helpful assistant with access to a Python code interpreter.
         You can execute Python code to help users with calculations, data analysis, and more.
         Always explain what the code will do before executing it.""",
-        tools=sessions_tool,
+        tools=[sessions_tool],
     )
 
     # Example 1: Simple calculation
     print("\n=== Example 1: Simple Calculation ===")
-    result = await agent.run("use the python tool to calculate 12345 * 67890?")
-    print(f"Result: {result}")
+    response = await agent.run("use the python tool to calculate 12345 * 67890?")
+    print(f"Result: {response.text}")
 
     # Example 2: Data analysis
     print("\n=== Example 2: Data Analysis ===")
-    result = await agent.run(
+    response = await agent.run(
         "use the python tool to Calculate the mean and standard deviation of the list: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]"
     )
-    print(f"Result: {result}")
+    print(f"Result: {response.text}")
 
     # Example 3: Generate data
     print("\n=== Example 3: Generate Plot Data ===")
-    result = await agent.run("use the python tool toGenerate 10 random numbers between 1 and 100 and show their sum")
-    print(f"Result: {result}")
+    response = await agent.run("use the python tool toGenerate 10 random numbers between 1 and 100 and show their sum")
+    print(f"Result: {response.text}")
 
     # Example 4: Working with libraries
     print("\n=== Example 4: Using NumPy ===")
-    result = await agent.run(
+    response = await agent.run(
         "use the python tool with numpy to create a 3x3 identity matrix and calculate its determinant"
     )
-    print(f"Result: {result}")
+    print(f"Result: {response.text}")
 
 
 async def direct_tool_usage_example():
