@@ -35,31 +35,39 @@ Integrate the code interpreter with AI agents for natural language code executio
 
 ```python
 import asyncio
+import os
+from agent_framework import Agent
+from agent_framework.openai import OpenAIChatCompletionClient
 from azure.identity import DefaultAzureCredential
-from agent_framework.azure import AzureOpenAIChatClient
 from maf_code_interpreter import SessionsPythonTool
+
 
 async def main():
     # Create the code interpreter tool
     sessions_tool = SessionsPythonTool(
-        pool_management_endpoint="YOUR_POOL_ENDPOINT",
-        credential=DefaultAzureCredential()
+        pool_management_endpoint="YOUR_POOL_ENDPOINT", credential=DefaultAzureCredential()
     )
-    
+
     # Create an AI agent with the tool
-    agent = AzureOpenAIChatClient(
-        credential=DefaultAzureCredential()
-    ).create_agent(
+    client = OpenAIChatCompletionClient(
+        model=os.getenv("AZURE_OPENAI_CHAT_DEPLOYMENT_NAME", "gpt-4o"),
+        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+        api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+        api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2025-03-01-preview"),
+    )
+
+    agent = Agent(
+        client=client,
+        name="code-interpreter",
         instructions="""You are a helpful assistant with access to a Python code interpreter.
         You can execute Python code to help users with calculations, data analysis, and more.""",
-        tools=sessions_tool  # Pass the tool directly - no wrapper needed!
+        tools=[sessions_tool],
     )
-    
+
     # Ask the agent to perform calculations
-    result = await agent.run(
-        "Calculate the mean and standard deviation of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]"
-    )
-    print(result)
+    response = await agent.run("Calculate the mean and standard deviation of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]")
+    print(response.text)
+
 
 asyncio.run(main())
 ```
